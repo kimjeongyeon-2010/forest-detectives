@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="description" content="색깔 구역마다 숨은 숲속 친구를 논리로 찾아내는 추리 퍼즐. 이지·노멀·하드 3단계, 친구와 온라인 레이스.">
+<meta name="description" content="색깔 구역마다 숨은 숲속 친구를 논리로 찾아내는 추리 퍼즐. 스테이지 500개, 친구와 온라인 레이스.">
 <meta property="og:title" content="숲속 탐정단">
 <meta property="og:description" content="누가 먼저 숲속 친구를 찾아낼까요? 친구와 같은 퍼즐로 추리 대결!">
 <meta name="theme-color" content="#245c47">
@@ -97,6 +97,8 @@ svg{display:block}
 .facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:22px}
 .facts span{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);font-size:13px;color:var(--ink-2)}
 .facts svg{width:14px;height:14px;color:var(--leaf)}
+.apk-link{display:inline-flex;align-items:center;gap:6px;padding:6px 13px;border-radius:999px;background:var(--green);color:var(--on-green);font-family:var(--f-display);font-size:13.5px;text-decoration:none}
+.apk-link svg{width:15px;height:15px}
 .hero-art{position:relative;height:330px;margin-top:30px;max-width:480px}
 .hero-board{position:absolute;left:70px;top:20px;width:250px;max-width:70%;aspect-ratio:1;padding:6px;border-radius:20px;background:var(--board);box-shadow:0 22px 40px var(--shadow);transform:rotate(-8deg);animation:bob 6s ease-in-out infinite}
 .hero-board .grid{border-radius:14px}
@@ -401,6 +403,14 @@ dialog p{font-size:14px;color:var(--ink-2)}
 .acct-me .who b{display:block;font-family:var(--f-display);font-weight:400;font-size:19px}
 .acct-me .who span{font-size:13px;color:var(--ink-2)}
 #acctDlg .tabs{margin-top:14px}
+.acct-del{margin-top:6px;border-top:1px dashed var(--line);padding-top:12px}
+.acct-del summary{cursor:pointer;font-size:13px;color:var(--ink-3);list-style:none;text-align:center}
+.acct-del summary::-webkit-details-marker{display:none}
+.acct-del p{font-size:13px;color:var(--ink-2);margin-top:10px}
+.del-btn{color:var(--danger)!important;border-color:color-mix(in srgb,var(--danger) 40%,transparent)!important}
+/* inside the native app: no text selection / callouts on game UI, no rubber-band scroll */
+.native body{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;overscroll-behavior:none}
+.native input,.native textarea{-webkit-user-select:text;user-select:text}
 @media (max-width:980px){
   .home{grid-template-columns:1fr;gap:28px;padding-bottom:90px}
   .hero-art{height:260px;margin-inline:auto}
@@ -518,6 +528,7 @@ dialog p{font-size:14px;color:var(--ink-2)}
      <span><svg><use href="#i-check"/></svg>퍼즐마다 정답은 하나</span>
      <span><svg><use href="#i-lock"/></svg>보드는 나만 보기</span>
      <span><svg><use href="#i-leaf"/></svg>스테이지 500개</span>
+     <a class="apk-link" id="apkLink" href="forest-detectives-1.0.0.apk" download hidden><svg><use href="#i-device"/></svg>안드로이드 앱 받기</a>
     </div>
     <div class="hero-art" aria-hidden="true">
      <svg class="hero-leaf l1"><use href="#i-leaf"/></svg>
@@ -700,6 +711,14 @@ dialog p{font-size:14px;color:var(--ink-2)}
   <div class="who"><svg id="acctMeAv" aria-hidden="true"><use href="#a-fox"/></svg><div><b id="acctMeName">탐정</b><span id="acctMeId">아이디</span></div></div>
   <p class="acct-ok" id="acctMeSave"></p>
   <button class="btn btn-ghost btn-full" id="acctLogout" type="button" style="justify-content:center"><svg><use href="#i-exit"/></svg>로그아웃</button>
+  <details class="acct-del" id="acctDel">
+   <summary>계정 삭제</summary>
+   <p>계정과 계정에 저장된 스테이지 기록이 서버에서 영구히 지워져요. 되돌릴 수 없어요.</p>
+   <label class="field-label" for="delPw">비밀번호 확인</label>
+   <input class="text-input" id="delPw" type="password" maxlength="64" autocomplete="current-password">
+   <p class="acct-err" id="delErr" role="alert" hidden></p>
+   <button class="btn btn-ghost btn-full del-btn" id="delBtn" type="button" style="justify-content:center">계정 영구 삭제</button>
+  </details>
  </div>
 </dialog>
 
@@ -1258,6 +1277,35 @@ function buildPuzzle(pid) {
     label: `${d.letter.toUpperCase()}${String(p.idx + 1).padStart(3, '0')}-${p.t + 1}` };
 }
 
+/* ---------------- native app bridge (Capacitor; inactive on the website) ---------------- */
+const SITE_URL = 'https://kimjeongyeon-2010.github.io/forest-detectives/';
+const Native = {
+  is() { const c = window.Capacitor; return !!(c && typeof c.isNativePlatform === 'function' && c.isNativePlatform()); },
+  plugin(name) { const c = window.Capacitor; return this.is() && c.Plugins ? c.Plugins[name] || null : null; },
+  haptic(kind) {
+    const h = this.plugin('Haptics'); if (!h) return;
+    try {
+      if (kind === 'found') h.impact({ style: 'LIGHT' });
+      else if (kind === 'wrong') h.notification({ type: 'ERROR' });
+      else if (kind === 'win') h.notification({ type: 'SUCCESS' });
+    } catch {}
+  },
+};
+function initNative() {
+  if (!Native.is()) return;
+  root.classList.add('native');
+  const App = Native.plugin('App');
+  if (App) App.addListener('backButton', () => {
+    const open = [...document.querySelectorAll('dialog')].find(d => d.open);
+    if (open) { open.close(); return; }
+    if (!$('play').hidden) { $('leaveBtn').click(); return; }
+    if (!$('stages').hidden) { goHome(); return; }
+    if (App.minimizeApp) App.minimizeApp().catch(() => {}); else App.exitApp();
+  });
+  const splash = Native.plugin('SplashScreen');
+  if (splash) setTimeout(() => splash.hide().catch(() => {}), 250);
+}
+
 /* ---------------- audio ---------------- */
 const Sfx = {
   ctx: null,
@@ -1291,7 +1339,10 @@ const Sfx = {
   },
 };
 function speak(text) {
-  if (!settings.voice || !('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return;
+  if (!settings.voice) return;
+  const tts = Native.plugin('TextToSpeech');
+  if (tts) { tts.stop().catch(() => {}).then(() => tts.speak({ text, lang: 'ko-KR', rate: 1.0, pitch: 1.1, volume: 0.9, category: 'ambient' })).catch(() => {}); return; }
+  if (!('speechSynthesis' in window) || !('SpeechSynthesisUtterance' in window)) return;
   try {
     const s = window.speechSynthesis; s.cancel();
     const u = new SpeechSynthesisUtterance(text), voices = s.getVoices();
@@ -1561,13 +1612,13 @@ function guess(i) {
     G.found.add(i); G.marks.delete(i);
     if (G.auto) autoMarkAround(i);
     renderBoardState(); renderStatus();
-    Sfx.play('found'); FX.burst(i, 'found');
+    Sfx.play('found'); FX.burst(i, 'found'); Native.haptic('found');
     if (G.found.size === P.solution.length) { win(); return; }
     speak(PRAISE[(G.found.size - 1) % PRAISE.length]);
   } else {
     G.mistakes++; G.wrong.add(i); G.marks.delete(i);
     renderBoardState(); renderStatus(true);
-    Sfx.play('wrong'); FX.burst(i, 'wrong');
+    Sfx.play('wrong'); FX.burst(i, 'wrong'); Native.haptic('wrong');
     const el = cellEls[i]; el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
     const left = G.d.hearts - G.mistakes;
     if (left <= 0) { lose(); return; }
@@ -1577,7 +1628,7 @@ function guess(i) {
 }
 function win() {
   G.status = 'won'; G.endAt = performance.now();
-  Sfx.play('win'); FX.confetti();
+  Sfx.play('win'); FX.confetti(); Native.haptic('win');
   speak('대단해요! 모든 친구를 찾았어요!');
   G.P.solution.forEach((c, j) => setTimeout(() => { const el = cellEls[c]; if (el) { el.classList.remove('cheer'); void el.offsetWidth; el.classList.add('cheer'); } }, j * 70));
   if (!G.multi) recordSolo(true);
@@ -1976,8 +2027,9 @@ const Progress = {
 };
 
 /* ---------------- accounts (Firebase: ID + password, progress in Firestore) ---------------- */
-function firebaseBackend(A, F, app) {
-  const auth = A.getAuth(app), db = F.getFirestore(app);
+function firebaseBackend(A, F, app, native) {
+  // inside the app WebView, set persistence explicitly instead of getAuth()'s browser defaults
+  const auth = native ? A.initializeAuth(app, { persistence: [A.indexedDBLocalPersistence, A.browserLocalPersistence] }) : A.getAuth(app), db = F.getFirestore(app);
   return {
     onUser: cb => A.onAuthStateChanged(auth, u => cb(u ? { uid: u.uid, email: u.email || '' } : null)),
     signUp: async (email, pw) => { const c = await A.createUserWithEmailAndPassword(auth, email, pw); return { uid: c.user.uid, email }; },
@@ -1985,6 +2037,12 @@ function firebaseBackend(A, F, app) {
     signOut: () => A.signOut(auth),
     load: async uid => { const s = await F.getDoc(F.doc(db, 'players', uid)); return s.exists() ? s.data() : null; },
     save: (uid, data) => F.setDoc(F.doc(db, 'players', uid), Object.assign({}, data, { updatedAt: F.serverTimestamp() }), { merge: true }),
+    deleteAccount: async (email, pw) => {
+      const c = await A.signInWithEmailAndPassword(auth, email, pw);
+      await F.deleteDoc(F.doc(db, 'players', c.user.uid));
+      await A.deleteUser(c.user);
+      return c.user.uid;
+    },
   };
 }
 const Account = {
@@ -1994,9 +2052,13 @@ const Account = {
     else if (FIREBASE_CONFIG && !window.claude) {
       this.status = 'loading'; renderAccount();
       try {
-        const base = `https://www.gstatic.com/firebasejs/${FB_VER}/`;
-        const [app, A, F] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore-lite.js')]);
-        this.backend = firebaseBackend(A, F, app.initializeApp(FIREBASE_CONFIG));
+        let app, A, F;
+        if (window.ForestFirebase) ({ app, A, F } = window.ForestFirebase);
+        else {
+          const base = `https://www.gstatic.com/firebasejs/${FB_VER}/`;
+          [app, A, F] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore-lite.js')]);
+        }
+        this.backend = firebaseBackend(A, F, app.initializeApp(FIREBASE_CONFIG), Native.is());
       } catch { this.status = 'error'; renderAccount(); return; }
     } else { this.status = 'off'; renderAccount(); return; }
     this.status = 'ready';
@@ -2037,6 +2099,11 @@ const Account = {
   },
   async signIn(id, pw) { const u = await this.backend.signIn(`${id}@${this.domain()}`, pw); await this.onUser(u); },
   async signOut() { await this.backend.signOut(); await this.onUser(null); },
+  async deleteAccount(pw) {
+    const uid = await this.backend.deleteAccount(`${this.id}@${this.domain()}`, pw);
+    try { localStorage.removeItem('fd2:progress:' + uid); } catch {}
+    await this.onUser(null);
+  },
   async push() {
     if (!this.user) return;
     if (this.saving) { this.again = true; return; }
@@ -2110,9 +2177,21 @@ function openAccount(mode) {
     $('acctMeName').textContent = settings.name || '이름 없는 탐정';
     $('acctMeId').textContent = `아이디 ${Account.id}`;
     $('acctMeSave').textContent = `스테이지 ${Progress.cleared()}개 클리어 · 별 ${Progress.stars()}개 · 기록이 계정에 저장돼요.`;
+    $('delPw').value = ''; $('delErr').hidden = true; $('acctDel').open = false;
   } else { setAcctMode(mode || 'in'); $('acctPw').value = ''; $('acctPw2').value = ''; }
   try { $('acctDlg').showModal(); } catch { $('acctDlg').setAttribute('open', ''); }
   if (!me) setTimeout(() => $('acctId').focus(), 50);
+}
+async function deleteMyAccount() {
+  const btn = $('delBtn'), err = msg => { $('delErr').textContent = msg; $('delErr').hidden = false; };
+  $('delErr').hidden = true;
+  if ($('delPw').value.length < 6) return err('계정을 지우려면 비밀번호를 다시 입력해 주세요.');
+  if (!btn.dataset.armed) { btn.dataset.armed = '1'; btn.textContent = '한 번 더 누르면 영구 삭제돼요'; setTimeout(() => { delete btn.dataset.armed; btn.textContent = '계정 영구 삭제'; }, 4000); return; }
+  delete btn.dataset.armed; btn.disabled = true; btn.textContent = '삭제하는 중…';
+  const id = Account.id;
+  try { await Account.deleteAccount($('delPw').value); $('acctDlg').close(); toast(`${id} 계정과 기록을 모두 지웠어요.`); }
+  catch (ex) { err(authError(ex)); }
+  finally { btn.disabled = false; btn.textContent = '계정 영구 삭제'; $('delPw').value = ''; }
 }
 async function submitAccount(e) {
   e.preventDefault();
@@ -2347,10 +2426,10 @@ function renderConn() {
 }
 function renderInviteCopy() {
   if (Net.kind !== 'p2p') return;
-  $('copyInvite').lastChild.textContent = '초대 링크 복사';
+  $('copyInvite').lastChild.textContent = Native.plugin('Share') ? '친구 초대하기' : '초대 링크 복사';
   $('lobbyText').textContent = '초대 링크를 친구에게 보내 주세요. 링크를 열고 이름만 적으면 바로 이 방으로 들어와요. 각자 다른 곳에서도 같은 퍼즐로 대결할 수 있어요.';
 }
-function inviteLink() { return location.origin + location.pathname + '#room-' + String(Net.code || '').toLowerCase(); }
+function inviteLink() { return (Native.is() ? SITE_URL : location.origin + location.pathname) + '#room-' + String(Net.code || '').toLowerCase(); }
 function renderRoom() {
   if (!Net.r) return;
   const ri = roundInfo(), { players, cfg } = ri;
@@ -2509,7 +2588,7 @@ function wire() {
   };
   syncToggle();
   $('sfxBtn').onclick = () => { settings.sfx = !settings.sfx; store.set('sfx', settings.sfx); syncToggle(); if (settings.sfx) Sfx.play('found'); };
-  $('voiceBtn').onclick = () => { settings.voice = !settings.voice; store.set('voice', settings.voice); syncToggle(); if (settings.voice) speak('칭찬 음성을 켰어요. 멋진 추리를 기대할게요!'); else try { speechSynthesis.cancel(); } catch {} };
+  $('voiceBtn').onclick = () => { settings.voice = !settings.voice; store.set('voice', settings.voice); syncToggle(); if (settings.voice) speak('칭찬 음성을 켰어요. 멋진 추리를 기대할게요!'); else { try { speechSynthesis.cancel(); } catch {} const t = Native.plugin('TextToSpeech'); if (t) t.stop().catch(() => {}); } };
   $('helpBtn').onclick = () => { try { $('helpDlg').showModal(); } catch { $('helpDlg').setAttribute('open', ''); } };
   $('helpClose').onclick = $('helpOk').onclick = () => $('helpDlg').close();
   $('animals').onclick = e => { const b = e.target.closest('.animal-btn'); if (!b) return; settings.animal = b.dataset.animal; store.set('animal', settings.animal); $('animals').querySelectorAll('.animal-btn').forEach(x => x.setAttribute('aria-pressed', String(x === b))); if (Net.r) Net.set({ animal: settings.animal }); renderAccount(); Account.push(); };
@@ -2526,6 +2605,7 @@ function wire() {
   $('acctTabUp').onclick = () => setAcctMode('up');
   $('acctForm').addEventListener('submit', submitAccount);
   $('acctId').addEventListener('input', () => { const el = $('acctId'); const v = el.value.toLowerCase().replace(/[^a-z0-9_]/g, ''); if (v !== el.value) el.value = v; });
+  $('delBtn').onclick = deleteMyAccount;
   $('acctLogout').onclick = async () => { try { await Account.signOut(); $('acctDlg').close(); toast('로그아웃했어요. 이 기기의 게스트 기록으로 돌아왔어요.'); } catch (e) { toast(authError(e)); } };
   document.addEventListener('click', e => { const b = e.target.closest('[data-acct]'); if (b) openAccount(b.dataset.acct); });
   const online = async (asHost) => {
@@ -2564,7 +2644,9 @@ function wire() {
     lose(true);
   };
   $('copyCode').onclick = () => copyText(Net.code || '', '게임 코드를 복사했어요.');
-  $('copyInvite').onclick = () => Net.kind === 'p2p'
+  $('copyInvite').onclick = () => Native.plugin('Share') && Net.kind === 'p2p'
+    ? Native.plugin('Share').share({ title: '숲속 탐정단 초대', text: `숲속 탐정단에서 추리 대결해요! 앱에서 ‘코드로 참가’에 ${Net.code}을 입력하거나 아래 링크를 열어 주세요.`, url: inviteLink(), dialogTitle: '친구 초대하기' }).catch(() => {})
+    : Net.kind === 'p2p'
     ? copyText(`숲속 탐정단에서 추리 대결해요! 링크를 열고 이름만 적으면 바로 들어올 수 있어요.\n${inviteLink()}\n(게임 코드: ${Net.code})`, '초대 링크를 복사했어요. 친구에게 보내 주세요!')
     : copyText(`숲속 탐정단에서 추리 대결해요! 이 페이지를 열고 ‘코드로 참가’에 ${Net.code}을 입력해 주세요.`, '초대 문구를 복사했어요. 페이지 링크와 함께 보내 주세요.');
   addEventListener('resize', () => FX.resize());
@@ -2583,6 +2665,9 @@ async function copyText(text, ok) {
 
 /* ---------------- boot ---------------- */
 function boot() {
+  initNative();
+  // the website offers the Android app only to Android phone browsers (never inside the app or on claude.ai)
+  if (/Android/i.test(navigator.userAgent) && !Native.is() && !window.claude) $('apkLink').hidden = false;
   Progress.use('guest');
   wire();
   initInput();
